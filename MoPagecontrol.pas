@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///  This page control component implements that tabs have close buttons.                                           ///
+///  This codes have been getting from here                                                                         ///
+///  https://stackoverflow.com/questions/2201850/how-to-implement-a-close-button-for-a-ttabsheet-of-a-tpagecontrol  ///
+///
+///  December 18 2023 - Added OnCloseTabSheet event property to allow closing any tab(s).
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 unit MoPagecontrol;
 
 interface
@@ -5,6 +13,8 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, Vcl.ComCtrls, Vcl.Controls,
   Vcl.Themes, System.Types, System.Math;
 type
+  TOnCloseMoTabSheet = procedure(Sender: TObject; var AllowClose: Boolean) of object;
+
   TMoPageControl = class (TPageControl)
   private
     fCloseButtonMouseDownIndex: Integer;
@@ -12,15 +22,18 @@ type
     fUseThemes : boolean;
     fOnMouseLeave2: TNotifyEvent;
     FCloseButtonsRect: array of TRect;
+    fOnCloseTabSheet: TOnCloseMoTabSheet;
   protected
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure DrawTab(TabIndex: Integer; const Rect: TRect; Active: Boolean); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure DoMouseLeaveX(Sender: TObject);
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure CloseTabSheet(Sender: TObject; var AllowClose: Boolean);
   public
     constructor Create(AOwner: TComponent); override;
   published
+    property OnCloseTabSheet: TOnCloseMoTabSheet read fOnCloseTabSheet write fOnCloseTabSheet;
     property OnMouseLeave2: TNotifyEvent read fOnMouseLeave2 write fOnMouseLeave2;
   end;
 
@@ -79,7 +92,7 @@ begin
 
     I := Canvas.TextWidth(Pages[TabIndex].Caption);
     if I+25>TabWidth then
-      TabWidth := I + 10;
+      TabWidth := I + 25;
 
     if not fUseThemes then
     begin
@@ -106,24 +119,13 @@ begin
   end;
 end;
 
-procedure TMoPageControl.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-var
-  I: Integer;
+procedure TMoPageControl.CloseTabSheet(Sender: TObject;
+  var AllowClose: Boolean);
 begin
-  inherited;
-
-  if Button = mbLeft then
-  begin
-    for I := 0 to  PageCount-1 do //Length(FCloseButtonsRect) - 1 do
-    begin
-      if PtInRect(FCloseButtonsRect[I], Point(X, Y)) then
-      begin
-        fCloseButtonMouseDownIndex := I;
-        fCloseButtonShowPushed := True;
-        Repaint;
-      end;
-    end;
-  end;
+  if Assigned(fOnCloseTabSheet) then
+    fOnCloseTabSheet(Sender as TTabSheet, AllowClose)
+  else
+    AllowClose := True;
 end;
 
 constructor TMoPageControl.Create(AOwner: TComponent);
@@ -164,8 +166,29 @@ begin
   end;
 end;
 
+procedure TMoPageControl.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+var
+  I: Integer;
+begin
+  inherited;
+
+  if Button = mbLeft then
+  begin
+    for I := 0 to  PageCount-1 do //Length(FCloseButtonsRect) - 1 do
+    begin
+      if PtInRect(FCloseButtonsRect[I], Point(X, Y)) then
+      begin
+        fCloseButtonMouseDownIndex := I;
+        fCloseButtonShowPushed := True;
+        Repaint;
+      end;
+    end;
+  end;
+end;
+
 procedure TMoPageControl.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
   Y: Integer);
+var AllowClose : boolean;
 begin
   inherited;
 
@@ -173,7 +196,11 @@ begin
   begin
     if PtInRect(FCloseButtonsRect[FCloseButtonMouseDownIndex], Point(X, Y)) then
     begin
-      Pages[FCloseButtonMouseDownIndex].Free;
+
+      CloseTabSheet(Pages[FCloseButtonMouseDownIndex], AllowClose);
+
+      if AllowClose then
+        Pages[FCloseButtonMouseDownIndex].Free;
 
       FCloseButtonMouseDownIndex := -1;
       Repaint;
